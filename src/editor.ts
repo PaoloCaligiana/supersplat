@@ -315,6 +315,9 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
 
                 // calculate final matrix
                 mat.mul2(camera.camera._viewProjMat, splat.worldTransform);
+                
+                //define the rectangle edges in normalized coordinates
+
                 const sx = rect.start.x * 2 - 1;
                 const sy = rect.start.y * 2 - 1;
                 const ex = rect.end.x * 2 - 1;
@@ -350,6 +353,8 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
         });
     });
 
+    //All Intersecting Rings
+
     events.on('select.byMask', (op: string, mask: ImageData) => {
         const mode = events.invoke('camera.mode');
 
@@ -357,7 +362,7 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
             const splatData = splat.splatData;
             const state = splatData.getProp('state') as Uint8Array;
 
-            if (mode === 'centers') {
+            if (mode === 'centers' || mode === 'rings') {
                 const x = splatData.getProp('x');
                 const y = splatData.getProp('y');
                 const z = splatData.getProp('z');
@@ -383,35 +388,7 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
                     const my = Math.floor(vec4.y * mask.height);
                     return mask.data[(my * mask.width + mx) * 4] === 255;
                 });
-            } else if (mode === 'rings') {
-                const { width, height } = scene.targetSize;
-
-                scene.camera.pickPrep(splat);
-                const pick = scene.camera.pickRect(0, 0, width, height);
-
-                const selected = new Set<number>();
-                for (let y = 0; y < mask.height; ++y) {
-                    for (let x = 0; x < mask.width; ++x) {
-                        if (mask.data[(y * mask.width + x) * 4] === 255) {
-
-                            const sx0 = Math.floor(x / mask.width * width);
-                            const sy0 = Math.floor(y / mask.height * height);
-                            const sx1 = Math.floor((x + 1) / mask.width * width);
-                            const sy1 = Math.floor((y + 1) / mask.height * height);
-
-                            for (let sy = sy0; sy < sy1; ++sy) {
-                                for (let sx = sx0; sx < sx1; ++sx) {
-                                    selected.add(pick[(height - sy) * width + sx]);
-                                }
-                            }
-                        }
-                    }
-                }
-
-                processSelection(state, op, (i) => {
-                    return selected.has(i);
-                });
-            }
+            } 
 
             splat.updateState();
         });
