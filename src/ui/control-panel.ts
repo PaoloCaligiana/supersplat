@@ -5,7 +5,7 @@ import { Splat } from '../splat';
 import { version as appVersion } from '../../package.json';
 
 class ControlPanel extends Panel {
-    constructor(events: Events, remoteStorageMode: boolean, args = { }) {
+    constructor(events: Events, remoteStorageMode: boolean, args = {}) {
         Object.assign(args, {
             headerText: `SUPERSPLAT v${appVersion}`,
             id: 'control-panel',
@@ -199,7 +199,7 @@ class ControlPanel extends Panel {
         selectGlobal.append(selectAllButton);
         selectGlobal.append(selectNoneButton);
         selectGlobal.append(invertSelectionButton);
-        
+
         // select by size
         const selectBySize = new Container({
             class: 'control-parent'
@@ -275,6 +275,45 @@ class ControlPanel extends Panel {
         selectBySphere.append(selectBySphereRadio);
         selectBySphere.append(selectBySphereLabel);
         selectBySphere.append(selectBySphereCenter);
+
+        // select by box
+        const selectByBox = new Container({
+            class: 'control-parent'
+        });
+
+        const selectByBoxRadio = new RadioButton({
+            class: 'control-element'
+        });
+
+        const selectByBoxLabel = new Label({
+            class: 'control-label',
+            text: 'Box'
+        });
+
+        const selectByBoxMinAxis = new VectorInput({
+            class: 'control-element-expand',
+            precision: 3,
+            dimensions: 3,
+            value: [-0.5, -0.5, -0.5],
+
+            // @ts-ignore
+            placeholder: ['X', 'Y', 'Z'],
+            enabled: false
+        });
+        const selectByBoxMaxAxis = new VectorInput({
+            class: 'control-element-expand',
+            precision: 3,
+            dimensions: 3,
+            value: [0.5, 0.5, 0.5],
+            // @ts-ignore
+            placeholder: ['X', 'Y', 'Z'],
+            enabled: false
+        });
+
+        selectByBox.append(selectByBoxRadio);
+        selectByBox.append(selectByBoxLabel);
+        selectByBox.append(selectByBoxMinAxis);
+        selectByBox.append(selectByBoxMaxAxis);
 
         // select by plane
         const selectByPlane = new Container({
@@ -370,6 +409,7 @@ class ControlPanel extends Panel {
         selectionPanel.append(selectBySize);
         selectionPanel.append(selectByOpacity);
         selectionPanel.append(selectBySphere);
+        selectionPanel.append(selectByBox);
         selectionPanel.append(selectByPlane);
         selectionPanel.append(setAddRemove);
         selectionPanel.append(selectTools);
@@ -502,7 +542,7 @@ class ControlPanel extends Panel {
         });
 
         // radio logic
-        const radioGroup = [selectBySizeRadio, selectByOpacityRadio, selectBySphereRadio, selectByPlaneRadio];
+        const radioGroup = [selectBySizeRadio, selectByOpacityRadio, selectBySphereRadio, selectByBoxRadio, selectByPlaneRadio];
         radioGroup.forEach((radio, index) => {
             radio.on('change', () => {
                 if (radio.value) {
@@ -539,6 +579,7 @@ class ControlPanel extends Panel {
                 [selectBySizeSlider],
                 [selectByOpacitySlider],
                 [selectBySphereCenter],
+                [selectByBoxMinAxis, selectByBoxMaxAxis],
                 [selectByPlaneAxis, selectByPlaneOffset]
             ];
 
@@ -549,7 +590,8 @@ class ControlPanel extends Panel {
             });
 
             events.fire('select.bySpherePlacement', index === 2 ? selectBySphereCenter.value : [0, 0, 0, 0]);
-            events.fire('select.byPlanePlacement', index === 3 ? axes[selectByPlaneAxis.value] : [0, 0, 0], selectByPlaneOffset.value);
+            events.fire('select.byBoxPlacement', index === 3 ? selectByBoxMinAxis.value : [0, 0, 0], selectByBoxMaxAxis.value);
+            events.fire('select.byPlanePlacement', index === 4 ? axes[selectByPlaneAxis.value] : [0, 0, 0], selectByPlaneOffset.value);
         });
 
         const performSelect = (op: string) => {
@@ -557,7 +599,8 @@ class ControlPanel extends Panel {
                 case 0: events.fire('select.bySize', op, selectBySizeSlider.value); break;
                 case 1: events.fire('select.byOpacity', op, selectByOpacitySlider.value); break;
                 case 2: events.fire('select.bySphere', op, selectBySphereCenter.value); break;
-                case 3: events.fire('select.byPlane', op, axes[selectByPlaneAxis.value], selectByPlaneOffset.value); break;
+                case 3: events.fire('select.byBox', op, selectByBoxMinAxis.value, selectByBoxMaxAxis.value); break;
+                case 4: events.fire('select.byPlane', op, axes[selectByPlaneAxis.value], selectByPlaneOffset.value); break;
             }
         };
 
@@ -614,7 +657,45 @@ class ControlPanel extends Panel {
         });
 
         selectBySphereCenter.on('change', () => {
+            //check if sphere's radius is >= 0
+
+            const sphereValues = selectBySphereCenter.value;
+            const radius = selectBySphereCenter.value[3];
+            if(radius<0){
+                sphereValues[3] = 0;
+                selectBySphereCenter.value = sphereValues;
+            }
             events.fire('select.bySpherePlacement', selectBySphereCenter.value);
+        });
+
+
+        const validateMinMaxBox = ( validate: 'min' | 'max') =>{
+            const minValues = selectByBoxMinAxis.value;
+            const maxValues = selectByBoxMaxAxis.value;
+
+            // Ensure each coordinate of minValues is less than the corresponding coordinate of maxValues
+            for (let i = 0; i < minValues.length; i++) {
+                if (validate === 'min' && minValues[i] > maxValues[i]) 
+                    minValues[i] = maxValues[i];                
+                else if(validate === 'max' && maxValues[i] < minValues[i])
+                    maxValues[i] = minValues[i];
+            }
+
+            if(validate==="min")
+                selectByBoxMinAxis.value = minValues;
+            else if(validate==="max")
+                selectByBoxMaxAxis.value = maxValues;
+
+        }
+
+        selectByBoxMinAxis.on('change', () => {
+            validateMinMaxBox('min')
+            events.fire('select.byBoxPlacement', selectByBoxMinAxis.value, selectByBoxMaxAxis.value);
+        });
+
+        selectByBoxMaxAxis.on('change', () => {
+            validateMinMaxBox('max')
+            events.fire('select.byBoxPlacement', selectByBoxMinAxis.value, selectByBoxMaxAxis.value);
         });
 
         selectByPlaneAxis.on('change', () => {

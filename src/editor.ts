@@ -33,6 +33,9 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
     const debugSphereCenter = new Vec3();
     let debugSphereRadius = 0;
 
+    const debugMinPoint = new Vec3();
+    const debugMaxPoint = new Vec3();
+
     const debugPlane = new Vec3();
     let debugPlaneDistance = 0;
 
@@ -42,6 +45,10 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
 
         if (debugSphereRadius > 0) {
             app.drawWireSphere(debugSphereCenter, debugSphereRadius, Color.RED, 40);
+        }
+
+        if (debugMinPoint.length()>0) {
+            app.drawWireAlignedBox(debugMinPoint, debugMaxPoint, Color.RED);
         }
 
         if (debugPlane.length() > 0) {
@@ -241,11 +248,17 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
         scene.forceRender = true;
     });
 
+    events.on('select.byBoxPlacement', (boxMin: number[], boxMax: number[]) => {
+        debugMinPoint.set(boxMin[0], boxMin[1], boxMin[2]);
+        debugMaxPoint.set(boxMax[0], boxMax[1], boxMax[2]);
+        scene.forceRender = true;
+    });
+
     events.on('select.byPlanePlacement', (axis: number[], distance: number) => {
         debugPlane.set(axis[0], axis[1], axis[2]);
         debugPlaneDistance = distance;
-
         scene.forceRender = true;
+
     });
 
     events.on('select.bySphere', (op: string, sphere: number[]) => {
@@ -270,6 +283,42 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
             splat.updateState();
         });
     });
+    
+    events.on('select.byBox', (op: string, boxMin: number[], boxMax: number[]) => {
+        selectedSplats().forEach((splat) => {
+            const splatData = splat.splatData;
+            const state = splatData.getProp('state') as Uint8Array;
+            const x = splatData.getProp('x');
+            const y = splatData.getProp('y');
+            const z = splatData.getProp('z');
+            // Convert boxMin and boxMax to Vec3
+            const minVec = new Vec3(boxMin[0], boxMin[1], boxMin[2]);
+            const maxVec = new Vec3(boxMax[0], boxMax[1], boxMax[2]);
+    
+            // Invert the world transform to apply it to the points
+            mat.invert(splat.worldTransform);
+
+
+            // Transform the min and max points to local space
+            mat.transformPoint(minVec, minVec);
+            mat.transformPoint(maxVec, maxVec);
+           
+    
+            processSelection(state, op, (i) => {
+                const point = new Vec3(x[i], y[i], z[i]);
+    
+                // Check if the point is within the box
+                return (
+                    point.x >= minVec.x && point.x <= maxVec.x &&
+                    point.y >= minVec.y && point.y <= maxVec.y &&
+                    point.z >= minVec.z && point.z <= maxVec.z
+                );
+            });
+    
+            splat.updateState();
+        });
+    });
+    
 
     events.on('select.byPlane', (op: string, axis: number[], distance: number) => {
         selectedSplats().forEach((splat) => {
@@ -300,6 +349,9 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
 
     events.on('select.rect', (op: string, rect: any) => {
         const mode = events.invoke('camera.mode');
+        
+        // rect dims are already normalized (range [0,1])
+        // rx = clientX / window.innerWidth; ry = clientY / window.innerHeight
 
         selectedSplats().forEach((splat) => {
             const splatData = splat.splatData;
@@ -315,6 +367,8 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
 
                 // calculate final matrix
                 mat.mul2(camera.camera._viewProjMat, splat.worldTransform);
+
+                //convert the screen coordinates into the coordinates of our 3D space.
                 const sx = rect.start.x * 2 - 1;
                 const sy = rect.start.y * 2 - 1;
                 const ex = rect.end.x * 2 - 1;
