@@ -301,6 +301,9 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
     events.on('select.rect', (op: string, rect: any) => {
         const mode = events.invoke('camera.mode');
 
+        // rect dims are already normalized (range [0,1])
+        // rx = clientX / window.innerWidth; ry = clientY / window.innerHeight
+
         selectedSplats().forEach((splat) => {
             const splatData = splat.splatData;
             const state = splatData.getProp('state') as Uint8Array;
@@ -316,7 +319,7 @@ const registerEditorEvents = (events: Events, editHistory: EditHistory, scene: S
                 // calculate final matrix
                 mat.mul2(camera.camera._viewProjMat, splat.worldTransform);
                 
-                //define the rectangle edges in normalized coordinates
+                 //convert the screen coordinates into the coordinates of our 3D space.
 
                 const sx = rect.start.x * 2 - 1;
                 const sy = rect.start.y * 2 - 1;
